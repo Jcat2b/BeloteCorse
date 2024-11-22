@@ -1,14 +1,9 @@
 import React, { useState } from 'react';
 import { useDispatch } from 'react-redux';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  GoogleAuthProvider
-} from 'firebase/auth';
-import { auth } from '@/config/firebase';
-import { setError, clearError } from '@/store/features/authSlice';
-import { Mail, Lock, Google } from 'lucide-react';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../../config/firebase';
+import { setError, clearError } from '../../store/features/authSlice';
+import { Mail, Lock } from 'lucide-react';
 
 const AuthForm: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -31,15 +26,6 @@ const AuthForm: React.FC = () => {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      dispatch(setError((error as Error).message));
-    }
-  };
-
   return (
     <div className="max-w-md w-full mx-auto bg-white rounded-lg shadow-md p-8">
       <h2 className="text-2xl font-bold text-center mb-6">
@@ -55,7 +41,7 @@ const AuthForm: React.FC = () => {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="pl-10 w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+              className="pl-10 w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 p-2"
               required
             />
           </div>
@@ -69,10 +55,14 @@ const AuthForm: React.FC = () => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="pl-10 w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+              className="pl-10 w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 p-2"
+              minLength={6}
               required
             />
           </div>
+          <p className="mt-1 text-sm text-gray-500">
+            {!isLogin && "Le mot de passe doit contenir au moins 6 caractères"}
+          </p>
         </div>
 
         <button
@@ -82,16 +72,6 @@ const AuthForm: React.FC = () => {
           {isLogin ? 'Se connecter' : "S'inscrire"}
         </button>
       </form>
-
-      <div className="mt-4">
-        <button
-          onClick={handleGoogleSignIn}
-          className="w-full flex items-center justify-center gap-2 btn bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-        >
-          <Google className="h-5 w-5" />
-          Continuer avec Google
-        </button>
-      </div>
 
       <p className="mt-4 text-center text-sm text-gray-600">
         {isLogin ? "Pas encore de compte ?" : "Déjà un compte ?"}
