@@ -1,8 +1,8 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { RootState } from '@/store';
-import AuthForm from '@/components/auth/AuthForm';
+import type { RootState } from '../store';
+import AuthForm from '../components/auth/AuthForm';
 
 const AuthPage: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
