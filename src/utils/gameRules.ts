@@ -1,4 +1,4 @@
-import type { Card, CardSuit, CardValue } from '../types/game';
+import type { Card, CardSuit, CardValue, GameState, Player } from '../types/game';
 
 // Valeurs des cartes (pour le calcul des points)
 const CARD_VALUES: Record<CardValue, number> = {
@@ -25,6 +25,85 @@ const TRUMP_ORDER: CardValue[] = ['7', '8', 'Q', 'K', '10', 'A', '9', 'J'];
 // Ordre des cartes hors atout
 const NON_TRUMP_ORDER: CardValue[] = ['7', '8', '9', 'J', 'Q', 'K', '10', 'A'];
 
+// Vérifie si un joueur peut annoncer une belote
+export const canAnnounceBelote = (player: Player, trumpSuit: CardSuit): boolean => {
+  const hasQueen = player.hand.some(card => card.suit === trumpSuit && card.value === 'Q');
+  const hasKing = player.hand.some(card => card.suit === trumpSuit && card.value === 'K');
+  
+  // Vérifie si le joueur n'a pas déjà annoncé une belote
+  const hasAlreadyAnnounced = player.announcements.some(
+    announcement => announcement.type === 'BELOTE'
+  );
+
+  return hasQueen && hasKing && !hasAlreadyAnnounced;
+};
+
+// Vérifie si un joueur peut annoncer une rebelote
+export const canAnnounceRebelote = (player: Player, trumpSuit: CardSuit): boolean => {
+  // Le joueur doit avoir déjà annoncé une belote pour pouvoir annoncer une rebelote
+  const hasBelote = player.announcements.some(
+    announcement => announcement.type === 'BELOTE'
+  );
+  
+  const hasQueen = player.hand.some(card => card.suit === trumpSuit && card.value === 'Q');
+  const hasKing = player.hand.some(card => card.suit === trumpSuit && card.value === 'K');
+  
+  // Vérifie si le joueur n'a pas déjà annoncé une rebelote
+  const hasAlreadyAnnounced = player.announcements.some(
+    announcement => announcement.type === 'REBELOTE'
+  );
+
+  return hasBelote && (hasQueen || hasKing) && !hasAlreadyAnnounced;
+};
+
+// Génère un jeu de cartes mélangé
+export const generateDeck = (): Card[] => {
+  const suits: CardSuit[] = ['♠', '♥', '♣', '♦'];
+  const values: CardValue[] = ['7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+  const deck: Card[] = [];
+
+  suits.forEach(suit => {
+    values.forEach(value => {
+      deck.push({ suit, value });
+    });
+  });
+
+  // Mélanger le deck (Fisher-Yates shuffle)
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+
+  return deck;
+};
+
+// Distribue les cartes aux joueurs
+export const dealCards = (state: GameState) => {
+  const deck = generateDeck();
+  
+  // Distribution spécifique à la Belote Corse : 8 cartes par joueur
+  state.players.forEach((player, index) => {
+    player.hand = deck.slice(index * 8, (index + 1) * 8);
+    player.announcements = []; // Réinitialise les annonces
+  });
+};
+
+// Vérifie si une enchère est valide
+export const isValidBid = (points: number, currentContract: number): boolean => {
+  // Les enchères doivent être des multiples de 10
+  if (points % 10 !== 0) return false;
+  
+  // L'enchère minimale est de 80
+  if (points < 80) return false;
+  
+  // L'enchère maximale est de 160 (hors capot)
+  if (points > 160 && points !== 250) return false; // 250 représente le capot
+  
+  // L'enchère doit être supérieure à l'enchère précédente
+  return points > currentContract;
+};
+
+// Vérifie si une carte peut être jouée
 export const isValidPlay = (
   card: Card,
   hand: Card[],
@@ -50,6 +129,7 @@ export const isValidPlay = (
   return true;
 };
 
+// Détermine le gagnant d'un pli
 export const calculateTrickWinner = (
   trick: Card[],
   trumpSuit: CardSuit | null
@@ -75,18 +155,24 @@ export const calculateTrickWinner = (
   return winningCardIndex;
 };
 
+// Calcule les points d'un pli
 export const calculateTrickPoints = (
   trick: Card[],
-  trumpSuit: CardSuit | null
+  trumpSuit: CardSuit | null,
+  announcements: number = 0
 ): number => {
-  return trick.reduce((total, card) => {
+  const basePoints = trick.reduce((total, card) => {
     if (card.suit === trumpSuit) {
       return total + CARD_VALUES[card.value];
     }
     return total + NON_TRUMP_VALUES[card.value];
   }, 0);
+
+  // Ajoute les points des annonces (20 points pour belote/rebelote)
+  return basePoints + announcements * 20;
 };
 
+// Calcule le score final
 export const calculateFinalScore = (
   trickPoints: number,
   contractPoints: number,
