@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import GameBoard from '../components/game/GameBoard';
+import { GameBoard } from '../components/game';
 import GameChat from '../components/game/GameChat';
 import { initializeGame } from '../store/features/gameSlice';
 import type { RootState } from '../store';
@@ -13,7 +13,6 @@ const GameRoom: React.FC = () => {
 
   useEffect(() => {
     if (user && gameId) {
-      // Initialiser le jeu avec le joueur actuel
       dispatch(initializeGame({
         currentPlayerId: user.uid,
         gameId,
