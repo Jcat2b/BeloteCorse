@@ -1,11 +1,17 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import type { RootState } from '../../store';
-import { Users } from 'lucide-react';
+import { Users, ArrowLeft } from 'lucide-react';
 
 const WaitingPhase: React.FC = () => {
+  const navigate = useNavigate();
   const { players } = useSelector((state: RootState) => state.game);
   const remainingPlayers = 4 - players.length;
+
+  const handleReturn = () => {
+    navigate('/');
+  };
 
   return (
     <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
@@ -21,7 +27,7 @@ const WaitingPhase: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex justify-center gap-2">
+        <div className="flex justify-center gap-2 mb-6">
           {[...Array(4)].map((_, i) => (
             <div
               key={i}
@@ -31,6 +37,16 @@ const WaitingPhase: React.FC = () => {
             />
           ))}
         </div>
+
+        {remainingPlayers > 0 && (
+          <button
+            onClick={handleReturn}
+            className="btn bg-gray-600 text-white hover:bg-gray-700 flex items-center justify-center gap-2 mx-auto"
+          >
+            <ArrowLeft className="h-5 w-5" />
+            Retour à l'accueil
+          </button>
+        )}
       </div>
     </div>
   );
