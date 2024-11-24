@@ -61,6 +61,7 @@ const gameSlice = createSlice({
       }];
       state.phase = 'WAITING';
       state.turnStartTime = Date.now();
+      state.lastSaved = Date.now();
     },
 
     addPlayer: (state, action: PayloadAction<{ id: string; name: string; isBot: boolean }>) => {
@@ -124,62 +125,12 @@ const gameSlice = createSlice({
       state.contract.surcoinched = true;
     },
 
-    announceBelote: (state, action: PayloadAction<string>) => {
-      const player = state.players.find(p => p.id === action.payload);
-      if (!player || !state.trumpSuit || !canAnnounceBelote(player, state.trumpSuit)) {
-        return;
-      }
-
-      const announcement: Announcement = {
-        type: 'BELOTE',
-        playerId: action.payload,
-        timestamp: Date.now()
-      };
-
-      player.announcements.push(announcement);
-      state.lastAnnouncement = announcement;
-    },
-
-    announceRebelote: (state, action: PayloadAction<string>) => {
-      const player = state.players.find(p => p.id === action.payload);
-      if (!player || !state.trumpSuit || !canAnnounceRebelote(player, state.trumpSuit)) {
-        return;
-      }
-
-      const announcement: Announcement = {
-        type: 'REBELOTE',
-        playerId: action.payload,
-        timestamp: Date.now()
-      };
-
-      player.announcements.push(announcement);
-      state.lastAnnouncement = announcement;
-    },
-
     playCard: (state, action: PayloadAction<Card>) => {
       const playerIndex = state.currentPlayer;
       const player = state.players[playerIndex];
       
       if (!isValidPlay(action.payload, player.hand, state.currentTrick, state.trumpSuit)) {
         return;
-      }
-
-      if (state.trumpSuit && 
-          action.payload.suit === state.trumpSuit && 
-          (action.payload.value === 'Q' || action.payload.value === 'K')) {
-        if (canAnnounceBelote(player, state.trumpSuit)) {
-          player.announcements.push({
-            type: 'BELOTE',
-            playerId: player.id,
-            timestamp: Date.now()
-          });
-        } else if (canAnnounceRebelote(player, state.trumpSuit)) {
-          player.announcements.push({
-            type: 'REBELOTE',
-            playerId: player.id,
-            timestamp: Date.now()
-          });
-        }
       }
 
       player.hand = player.hand.filter(
@@ -192,12 +143,7 @@ const gameSlice = createSlice({
 
       if (state.currentTrick.length === 4) {
         const winnerIndex = calculateTrickWinner(state.currentTrick, state.trumpSuit);
-        const announcements = state.players.reduce((count, p) => 
-          count + p.announcements.filter(a => 
-            a.timestamp > state.tricks[state.tricks.length - 1]?.timestamp || 0
-          ).length, 0);
-        
-        const points = calculateTrickPoints(state.currentTrick, state.trumpSuit, announcements);
+        const points = calculateTrickPoints(state.currentTrick, state.trumpSuit);
         
         state.tricks.push({
           winner: state.players[winnerIndex].team,
@@ -208,27 +154,36 @@ const gameSlice = createSlice({
         state.currentTrick = [];
         state.currentPlayer = winnerIndex;
 
+        // Mise à jour du score
+        if (state.players[winnerIndex].team === 1) {
+          state.score.team1 += points;
+        } else {
+          state.score.team2 += points;
+        }
+
+        // Note: La phase ne change plus à ENDED, le jeu continue
         if (state.tricks.length === 8) {
-          const totalPoints = state.tricks.reduce((sum, trick) => {
-            return trick.winner === state.contract.team ? sum + trick.points : sum;
-          }, 0);
-
-          const finalScore = calculateTrickPoints(state.currentTrick, state.trumpSuit);
-          
-          if (state.contract.team === 1) {
-            state.score.team1 += finalScore;
-          } else {
-            state.score.team2 += finalScore;
-          }
-
-          state.phase = 'ENDED';
+          // Redistribution des cartes pour une nouvelle manche
+          dealCards(state);
+          state.phase = 'BIDDING';
+          state.currentPlayer = (winnerIndex + 1) % 4;
+          state.contract = {
+            points: 0,
+            suit: null,
+            team: null,
+            coinched: false,
+            surcoinched: false,
+          };
+          state.tricks = [];
+          state.bids = [];
+          state.consecutivePasses = 0;
         }
       }
     },
 
     updateTurnTimer: (state) => {
       const currentTime = Date.now();
-      if (currentTime - state.turnStartTime > 30000) { // 30 secondes
+      if (currentTime - state.turnStartTime > 30000) {
         state.currentPlayer = (state.currentPlayer + 1) % 4;
         state.turnStartTime = currentTime;
       }
@@ -238,10 +193,8 @@ const gameSlice = createSlice({
       const player = state.players.find(p => p.id === action.payload);
       if (player) {
         player.connected = false;
-        if (state.phase !== 'ENDED') {
-          state.status = 'PAUSED';
-          state.pauseReason = 'Joueur déconnecté';
-        }
+        state.status = 'PAUSED';
+        state.pauseReason = 'Joueur déconnecté';
       }
     },
 
@@ -252,18 +205,6 @@ const gameSlice = createSlice({
         if (state.players.every(p => p.connected)) {
           state.status = 'ACTIVE';
           state.pauseReason = null;
-        }
-      }
-    },
-
-    abandonGame: (state, action: PayloadAction<string>) => {
-      const player = state.players.find(p => p.id === action.payload);
-      if (player) {
-        player.hasAbandoned = true;
-        state.abandonedBy.push(action.payload);
-        if (state.phase !== 'ENDED') {
-          state.phase = 'ENDED';
-          state.status = 'ABANDONED';
         }
       }
     },
@@ -290,11 +231,8 @@ export const {
   updateTurnTimer,
   playerDisconnected,
   playerReconnected,
-  abandonGame,
   setGameState,
-  saveGameState,
-  announceBelote,
-  announceRebelote
+  saveGameState
 } = gameSlice.actions;
 
 export default gameSlice.reducer;
