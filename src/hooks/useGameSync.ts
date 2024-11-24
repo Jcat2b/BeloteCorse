@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -9,7 +9,6 @@ export const useGameSync = (gameId: string) => {
   const dispatch = useDispatch();
   const game = useSelector((state: RootState) => state.game);
 
-  // Écoute des changements dans Firestore
   useEffect(() => {
     if (!gameId) return;
 
@@ -18,7 +17,6 @@ export const useGameSync = (gameId: string) => {
     const unsubscribe = onSnapshot(gameRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
-        // Ne met à jour que si les données sont plus récentes
         if (data.lastSaved > game.lastSaved) {
           dispatch(setGameState(data));
         }
@@ -26,16 +24,25 @@ export const useGameSync = (gameId: string) => {
     });
 
     return () => unsubscribe();
-  }, [gameId, dispatch]);
+  }, [gameId, dispatch, game.lastSaved]);
 
-  // Sauvegarde des changements locaux
+  const saveGame = useCallback(() => {
+    if (game.id && game.lastSaved < Date.now() - 1000) {
+      dispatch(saveGameState());
+    }
+  }, [game.id, game.lastSaved, dispatch]);
+
   useEffect(() => {
-    const saveTimeout = setTimeout(() => {
-      if (game.id && game.lastSaved < Date.now() - 1000) { // Évite les sauvegardes trop fréquentes
-        dispatch(saveGameState());
-      }
-    }, 1000);
+    if (!game.id) return;
 
+    const saveTimeout = setTimeout(saveGame, 1000);
     return () => clearTimeout(saveTimeout);
-  }, [game.id, game.phase, game.currentPlayer, game.currentTrick, game.score, dispatch]);
+  }, [
+    game.id,
+    game.phase,
+    game.currentPlayer,
+    game.currentTrick,
+    game.score,
+    saveGame
+  ]);
 };
