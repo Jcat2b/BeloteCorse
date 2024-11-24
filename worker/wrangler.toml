@@ -1,0 +1,28 @@
+name = "belote-worker"
+main = "index.ts"
+compatibility_date = "2024-02-23"
+
+# Configuration KV
+kv_namespaces = [
+  { binding = "GAMES", id = "your-kv-namespace-id" }
+]
+
+# Variables d'environnement
+[vars]
+DATABASE_USERNAME = "your-database-username"
+DATABASE_PASSWORD = "your-database-password"
+
+# Configuration des routes
+[[routes]]
+pattern = "damp-forest-0b2b.jerem-catta.workers.dev"
+zone_id = "your-zone-id"
+
+# Configuration des WebSockets
+[durable_objects]
+bindings = [
+  { name = "GAMES", class_name = "GameDurableObject" }
+]
+
+# Configuration de développement
+[dev]
+port = 8787
