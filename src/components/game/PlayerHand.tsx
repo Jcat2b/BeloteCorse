@@ -3,6 +3,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import type { RootState } from '../../store';
 import type { Card } from '../../types/game';
 import { playCard } from '../../store/features/gameSlice';
+import AnimatedCard from './AnimatedCard';
 
 const PlayerHand: React.FC = () => {
   const dispatch = useDispatch();
@@ -18,23 +19,28 @@ const PlayerHand: React.FC = () => {
     dispatch(playCard(card));
   };
 
+  const getCardPosition = (index: number, total: number) => {
+    const spread = Math.min(600, total * 80); // Limite la largeur totale
+    const startX = -spread / 2;
+    const step = spread / (total - 1 || 1);
+    const x = startX + index * step;
+    const y = 0;
+    
+    return { x, y };
+  };
+
   return (
     <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 p-4">
-      <div className="flex gap-2">
+      <div className="relative h-40">
         {hand.map((card, index) => (
-          <button
+          <AnimatedCard
             key={`${card.suit}-${card.value}`}
+            card={card}
+            position={getCardPosition(index, hand.length)}
+            rotation={0}
+            isPlayable={isPlayerTurn}
             onClick={() => handleCardClick(card)}
-            disabled={!isPlayerTurn}
-            className={`transform transition-transform hover:-translate-y-4 
-              ${isPlayerTurn ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'}`}
-          >
-            <div className={`w-24 h-36 rounded-lg shadow-lg bg-white flex items-center justify-center
-              text-2xl font-bold ${card.suit === '♥' || card.suit === '♦' ? 'text-red-600' : 'text-black'}`}>
-              <span>{card.value}</span>
-              <span>{card.suit}</span>
-            </div>
-          </button>
+          />
         ))}
       </div>
     </div>
