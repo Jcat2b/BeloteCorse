@@ -25,12 +25,27 @@ const TRUMP_ORDER: CardValue[] = ['7', '8', 'Q', 'K', '10', 'A', '9', 'J'];
 // Ordre des cartes hors atout
 const NON_TRUMP_ORDER: CardValue[] = ['7', '8', '9', 'J', 'Q', 'K', '10', 'A'];
 
+// Calcule le score final
+export const calculateFinalScore = (
+  trickPoints: number,
+  contractPoints: number,
+  isCoinched: boolean,
+  isSurcoinched: boolean
+): number => {
+  const multiplier = isSurcoinched ? 4 : isCoinched ? 2 : 1;
+  
+  if (trickPoints >= contractPoints) {
+    return trickPoints * multiplier;
+  } else {
+    return -contractPoints * multiplier;
+  }
+};
+
 // Vérifie si un joueur peut annoncer une belote
 export const canAnnounceBelote = (player: Player, trumpSuit: CardSuit): boolean => {
   const hasQueen = player.hand.some(card => card.suit === trumpSuit && card.value === 'Q');
   const hasKing = player.hand.some(card => card.suit === trumpSuit && card.value === 'K');
   
-  // Vérifie si le joueur n'a pas déjà annoncé une belote
   const hasAlreadyAnnounced = player.announcements.some(
     announcement => announcement.type === 'BELOTE'
   );
@@ -40,7 +55,6 @@ export const canAnnounceBelote = (player: Player, trumpSuit: CardSuit): boolean 
 
 // Vérifie si un joueur peut annoncer une rebelote
 export const canAnnounceRebelote = (player: Player, trumpSuit: CardSuit): boolean => {
-  // Le joueur doit avoir déjà annoncé une belote pour pouvoir annoncer une rebelote
   const hasBelote = player.announcements.some(
     announcement => announcement.type === 'BELOTE'
   );
@@ -48,7 +62,6 @@ export const canAnnounceRebelote = (player: Player, trumpSuit: CardSuit): boolea
   const hasQueen = player.hand.some(card => card.suit === trumpSuit && card.value === 'Q');
   const hasKing = player.hand.some(card => card.suit === trumpSuit && card.value === 'K');
   
-  // Vérifie si le joueur n'a pas déjà annoncé une rebelote
   const hasAlreadyAnnounced = player.announcements.some(
     announcement => announcement.type === 'REBELOTE'
   );
@@ -170,22 +183,6 @@ export const calculateTrickPoints = (
 
   // Ajoute les points des annonces (20 points pour belote/rebelote)
   return basePoints + announcements * 20;
-};
-
-// Calcule le score final
-export const calculateFinalScore = (
-  trickPoints: number,
-  contractPoints: number,
-  isCoinched: boolean,
-  isSurcoinched: boolean
-): number => {
-  const multiplier = isSurcoinched ? 4 : isCoinched ? 2 : 1;
-  
-  if (trickPoints >= contractPoints) {
-    return trickPoints * multiplier;
-  } else {
-    return -contractPoints * multiplier;
-  }
 };
 
 // Fonction utilitaire pour obtenir le rang d'une carte
