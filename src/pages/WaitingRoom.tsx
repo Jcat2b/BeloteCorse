@@ -9,7 +9,6 @@ const WaitingRoom: React.FC = () => {
   const user = useSelector((state: RootState) => state.auth.user);
 
   const createGame = () => {
-    // Pour l'instant, on crée un ID unique basé sur le timestamp
     const newGameId = `game-${Date.now()}`;
     navigate(`/game/${newGameId}`);
   };
@@ -26,7 +25,7 @@ const WaitingRoom: React.FC = () => {
           
           <button
             onClick={createGame}
-            className="w-full btn btn-primary flex items-center justify-center gap-2 text-lg"
+            className="w-full btn btn-primary flex items-center justify-center gap-2"
           >
             <Plus className="h-6 w-6" />
             Créer une nouvelle table
