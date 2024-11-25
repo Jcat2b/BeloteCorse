@@ -1,22 +1,117 @@
-import { connect } from '@planetscale/database';
-import { WebSocketPair } from '@cloudflare/workers-types';
+import { connect } from '@libsql/client';
 import { Router } from 'itty-router';
+import { initDatabase, saveGame, getGame } from './database';
 
 interface Env {
-  GAMES: KVNamespace;
+  DB: D1Database;
+  GAMES_CACHE: KVNamespace;
 }
 
-// Configuration de la base de données
-const config = {
-  host: 'aws.connect.psdb.cloud',
-  username: process.env.DATABASE_USERNAME,
-  password: process.env.DATABASE_PASSWORD,
-};
-
-// Création du router
 const router = Router();
 
-// Gestion des connexions WebSocket
+// Middleware pour la gestion des erreurs
+const errorHandler = async (error: Error) => {
+  console.error('Error:', error);
+  return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
+    status: 500,
+    headers: { 'Content-Type': 'application/json' }
+  });
+};
+
+// Route pour créer une nouvelle partie
+router.post('/game/create', async (request: Request, env: Env) => {
+  try {
+    const { creatorId } = await request.json();
+    const gameId = crypto.randomUUID();
+    
+    // Créer la partie dans la base de données
+    await saveGame(gameId, {
+      id: gameId,
+      creatorId,
+      players: [],
+      status: 'WAITING',
+      createdAt: Date.now(),
+    });
+
+    // Mettre en cache pour un accès rapide
+    await env.GAMES_CACHE.put(gameId, JSON.stringify({
+      id: gameId,
+      creatorId,
+      status: 'WAITING'
+    }), { expirationTtl: 3600 }); // Cache d'une heure
+
+    return new Response(JSON.stringify({ gameId }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (error) {
+    return errorHandler(error);
+  }
+});
+
+// Route pour rejoindre une partie
+router.post('/game/:id/join', async (request: Request, env: Env) => {
+  try {
+    const { id } = request.params;
+    const { playerId } = await request.json();
+    
+    // Vérifier si la partie existe
+    const game = await getGame(id);
+    if (!game) {
+      return new Response(JSON.stringify({ error: 'Game not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Mettre à jour la partie
+    game.players.push(playerId);
+    await saveGame(id, game);
+    
+    // Mettre à jour le cache
+    await env.GAMES_CACHE.put(id, JSON.stringify(game), { expirationTtl: 3600 });
+
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (error) {
+    return errorHandler(error);
+  }
+});
+
+// Route pour récupérer l'état d'une partie
+router.get('/game/:id', async (request: Request, env: Env) => {
+  try {
+    const { id } = request.params;
+    
+    // Essayer de récupérer depuis le cache
+    const cached = await env.GAMES_CACHE.get(id);
+    if (cached) {
+      return new Response(cached, {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Si pas en cache, récupérer depuis la base de données
+    const game = await getGame(id);
+    if (!game) {
+      return new Response(JSON.stringify({ error: 'Game not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Mettre en cache pour les prochaines requêtes
+    await env.GAMES_CACHE.put(id, JSON.stringify(game), { expirationTtl: 3600 });
+
+    return new Response(JSON.stringify(game), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (error) {
+    return errorHandler(error);
+  }
+});
+
+// Gestionnaire des WebSocket
 const websocketHandler = async (request: Request, env: Env) => {
   const pair = new WebSocketPair();
   const [client, server] = Object.values(pair);
@@ -30,17 +125,23 @@ const websocketHandler = async (request: Request, env: Env) => {
       
       switch (data.type) {
         case 'JOIN_GAME':
-          await handleJoinGame(data.gameId, data.playerId, server, env);
+          const game = await getGame(data.gameId);
+          if (game) {
+            server.send(JSON.stringify({ type: 'GAME_STATE', data: game }));
+          }
           break;
         
         case 'GAME_ACTION':
-          await handleGameAction(data.gameId, data.action, server, env);
+          // Traiter l'action et sauvegarder
+          await saveGame(data.gameId, data.gameState);
+          // Mettre à jour le cache
+          await env.GAMES_CACHE.put(data.gameId, JSON.stringify(data.gameState), {
+            expirationTtl: 3600
+          });
           break;
-        
-        default:
-          server.send(JSON.stringify({ error: 'Unknown message type' }));
       }
     } catch (error) {
+      console.error('WebSocket error:', error);
       server.send(JSON.stringify({ error: 'Invalid message format' }));
     }
   });
@@ -50,77 +151,6 @@ const websocketHandler = async (request: Request, env: Env) => {
     webSocket: client,
   });
 };
-
-// Gestion des routes HTTP
-router.post('/game/create', async (request: Request, env: Env) => {
-  try {
-    const { creatorId } = await request.json();
-    const gameId = crypto.randomUUID();
-    
-    await env.GAMES.put(gameId, JSON.stringify({
-      id: gameId,
-      creatorId,
-      players: [],
-      status: 'WAITING',
-      createdAt: Date.now(),
-    }));
-
-    return new Response(JSON.stringify({ gameId }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (error) {
-    return new Response(JSON.stringify({ error: 'Failed to create game' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-});
-
-router.post('/game/:id/join', async (request: Request, env: Env) => {
-  try {
-    const { id } = request.params;
-    const { playerId } = await request.json();
-    
-    const game = await env.GAMES.get(id);
-    if (!game) {
-      return new Response(JSON.stringify({ error: 'Game not found' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    const gameData = JSON.parse(game);
-    if (gameData.players.length >= 4) {
-      return new Response(JSON.stringify({ error: 'Game is full' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    gameData.players.push(playerId);
-    await env.GAMES.put(id, JSON.stringify(gameData));
-
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (error) {
-    return new Response(JSON.stringify({ error: 'Failed to join game' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-});
-
-// Gestion des requêtes
-async function handleRequest(request: Request, env: Env): Promise<Response> {
-  // Gestion des WebSocket
-  if (request.headers.get('Upgrade') === 'websocket') {
-    return websocketHandler(request, env);
-  }
-
-  // Gestion des routes HTTP
-  return router.handle(request, env);
-}
 
 // Configuration du worker
 export default {
@@ -136,36 +166,14 @@ export default {
       });
     }
 
-    // Ajout des headers CORS pour toutes les réponses
-    const response = await handleRequest(request, env);
+    // Gestion des WebSocket
+    if (request.headers.get('Upgrade') === 'websocket') {
+      return websocketHandler(request, env);
+    }
+
+    // Routes HTTP normales
+    const response = await router.handle(request, env);
     response.headers.set('Access-Control-Allow-Origin', '*');
     return response;
   },
 };
-
-// Fonctions utilitaires
-async function handleJoinGame(gameId: string, playerId: string, ws: WebSocket, env: Env) {
-  const game = await env.GAMES.get(gameId);
-  if (!game) {
-    ws.send(JSON.stringify({ error: 'Game not found' }));
-    return;
-  }
-
-  const gameData = JSON.parse(game);
-  ws.send(JSON.stringify({ type: 'GAME_STATE', data: gameData }));
-}
-
-async function handleGameAction(gameId: string, action: any, ws: WebSocket, env: Env) {
-  const game = await env.GAMES.get(gameId);
-  if (!game) {
-    ws.send(JSON.stringify({ error: 'Game not found' }));
-    return;
-  }
-
-  const gameData = JSON.parse(game);
-  // Appliquer l'action au jeu
-  // TODO: Implémenter la logique du jeu
-
-  await env.GAMES.put(gameId, JSON.stringify(gameData));
-  ws.send(JSON.stringify({ type: 'GAME_STATE', data: gameData }));
-}
