@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client';
 
-const WORKER_URL = 'https://damp-forest-0b2b.jerem-catta.workers.dev';
+const WORKER_URL = 'http://localhost:3001';
 
 // Configuration du socket
 export const socket = io(WORKER_URL, {
@@ -9,15 +9,6 @@ export const socket = io(WORKER_URL, {
   reconnection: true,
   reconnectionAttempts: 5,
   reconnectionDelay: 1000,
-});
-
-// Gestionnaire d'événements de connexion
-socket.on('connect', () => {
-  console.log('Connected to game server');
-});
-
-socket.on('connect_error', (error) => {
-  console.error('Connection error:', error);
 });
 
 // API pour communiquer avec le worker
@@ -52,23 +43,6 @@ export const workerAPI = {
       return await response.json();
     } catch (error) {
       console.error('Error creating game:', error);
-      throw error;
-    }
-  },
-
-  // Envoyer une action de jeu
-  sendGameAction: async (gameId: string, action: any) => {
-    try {
-      const response = await fetch(`${WORKER_URL}/game/${gameId}/action`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(action),
-      });
-      return await response.json();
-    } catch (error) {
-      console.error('Error sending game action:', error);
       throw error;
     }
   },
