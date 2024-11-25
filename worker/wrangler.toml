@@ -2,20 +2,16 @@ name = "belote-worker"
 main = "index.ts"
 compatibility_date = "2024-02-23"
 
-# Configuration KV
+# Configuration KV pour le cache
 kv_namespaces = [
-  { binding = "GAMES", id = "your-kv-namespace-id" }
+  { binding = "GAMES_CACHE", id = "ID_GÉNÉRÉ_PAR_KV_CREATE" }
 ]
 
-# Variables d'environnement
-[vars]
-DATABASE_USERNAME = "your-database-username"
-DATABASE_PASSWORD = "your-database-password"
-
-# Configuration des routes
-[[routes]]
-pattern = "damp-forest-0b2b.jerem-catta.workers.dev"
-zone_id = "your-zone-id"
+# Configuration D1 pour SQLite
+[[d1_databases]]
+binding = "DB"
+database_name = "belote-db"
+database_id = "ID_GÉNÉRÉ_PAR_D1_CREATE"
 
 # Configuration des WebSockets
 [durable_objects]
