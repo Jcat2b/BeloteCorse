@@ -1,0 +1,27 @@
+-- Schema pour la base de données Belote Corse
+CREATE TABLE games (
+  id VARCHAR(255) PRIMARY KEY,
+  state JSON NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE players (
+  id VARCHAR(255) PRIMARY KEY,
+  username VARCHAR(255) NOT NULL,
+  rating INT DEFAULT 1000,
+  games_played INT DEFAULT 0,
+  games_won INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE game_history (
+  id VARCHAR(255) PRIMARY KEY,
+  game_id VARCHAR(255) NOT NULL,
+  player_id VARCHAR(255) NOT NULL,
+  action_type ENUM('BID', 'PLAY', 'COINCHE', 'SURCOINCHE') NOT NULL,
+  action_data JSON NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (game_id) REFERENCES games(id),
+  FOREIGN KEY (player_id) REFERENCES players(id)
+);
