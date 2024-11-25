@@ -11,13 +11,5 @@ export default defineConfig({
   },
   server: {
     port: 3000
-  },
-  build: {
-    rollupOptions: {
-      input: {
-        main: path.resolve(__dirname, 'index.html'),
-        worker: path.resolve(__dirname, 'src/worker.js')
-      }
-    }
   }
 });
